@@ -7,23 +7,237 @@ import re
 import argparse
 import xml.etree.ElementTree as XML
 import sys
+from collections import deque
 
 class Program:
     def __init__(self):
         self.order = 0
         self.instructions = []
+        self.variables = {}
+        self.dataStack = deque()
     
     def __repr__(self):
-        return str("Program:" + str(self.instructions))
+        return str("Program:" + re.sub(r'[,\]\[]', '', str(self.instructions)))
+    
+    def printState(self):
+        print("Order: " + str(self.order), file = sys.stderr)
+        print("Variables:")
+        for variable in self.variables:
+            print(" " + variable + ": value = " + str(self.variables[variable][0]) + "  " + str(self.variables[variable][1]), file = sys.stderr)
+        #print("Data stack: " + str(self.dataStack), file = sys.stderr)
+    
+    def checkVariableExists(self, variable):
+        if variable not in self.variables:
+            exitError(54)
 
-    def getInstruction(self): 
-        instruction = self.instructions[self.order]
-        self.order += 1
-        return instruction
+    def checkVariableType(self, variable, types = []):
+        if self.variables[variable][1] not in types:
+            exitError(53)
+    
+    def handleVariable(self, var):
+        if var.type != "var":
+            exitError(53)
+        self.checkVariableExists(var.value)
+
+    def handleSymbol(self, symb, allowedTypes = []):
+        if symb.type == "var":
+            self.checkVariableExists(symb.value)
+            self.checkVariableType(symb.value, allowedTypes)
+            return self.variables[symb.value]
+        elif symb.type in allowedTypes or allowedTypes == []:
+            return (symb.value, symb.type)
+        else:
+            exitError(32)
+
 
     def addInstruction(self, instruction):
         self.instructions.append(instruction)
 
+    def sortByOrder(self):
+        self.instructions.sort(key = lambda instruction: int(instruction.order))
+
+    def executeProgram(self):
+        while self.order < len(self.instructions):
+            self.executeInstruction()
+
+    def executeInstruction(self):
+        instruction = self.instructions[self.order]
+        self.order += 1
+        getattr(self, instruction.opcode)(*instruction.args)
+        self.printState()
+        
+
+    def MOVE(self, var, symb):
+        self.handleVariable(var)
+        symb = self.handleSymbol(symb)
+        self.variables[var.value] = symb
+
+    def CREATEFRAME(self):
+        #TODO
+        pass
+
+    def PUSHFRAME(self):
+        #TODO
+        pass
+
+    def POPFRAME(self):
+        #TODO
+        pass
+
+    def DEFVAR(self, var):
+        if var.type != "var":
+            exitError(53)
+        if var.value in self.variables:
+            exitError(52)
+        self.variables[var.value] = (None, None)
+
+    def CALL(self, label):
+        #TODO
+        pass
+
+    def RETURN(self):
+        #TODO
+        pass
+
+    def PUSHS(self, symb):
+        self.dataStack.append(symb)
+
+    def POPS(self, var):
+        self.checkVariableExists(var.value)
+        self.variables[var.value] = self.dataStack.pop()
+
+    def ADD(self, var, symb1, symb2):
+        self.handleVariable(var)
+        symb1 = self.handleSymbol(symb1, ["int"])
+        symb2 = self.handleSymbol(symb2, ["int"])
+        self.variables[var.value] = (str(int(symb1[0]) + int(symb2[0])), "int")
+
+
+    def SUB(self, var, symb1, symb2):
+        self.handleVariable(var)
+        symb1 = self.handleSymbol(symb1, ["int"])
+        symb2 = self.handleSymbol(symb2, ["int"])
+        self.variables[var.value] = (str(int(symb1[0]) - int(symb2[0])), "int")
+
+    def MUL(self, var, symb1, symb2):
+        self.handleVariable(var)
+        symb1 = self.handleSymbol(symb1, ["int"])
+        symb2 = self.handleSymbol(symb2, ["int"])
+        self.variables[var.value] = (str(int(symb1[0]) * int(symb2[0])), "int")
+
+    def IDIV(self, var, symb1, symb2):
+        self.handleVariable(var)
+        symb1 = self.handleSymbol(symb1, ["int"])
+        symb2 = self.handleSymbol(symb2, ["int"])
+        if symb2[0] == 0:
+            exitError(57)
+        self.variables[var.value] = (str(int(symb1[0]) // int(symb2[0])), "int")
+
+    def LT(self, var, symb1, symb2):
+        #TODO nil
+        self.handleVariable(var)
+        symb1 = self.handleSymbol(symb1, ["int", "string", "bool"])
+        symb2 = self.handleSymbol(symb2, ["int", "string", "bool"])
+        if symb1[1] == symb2[1]:
+            self.variables[var.value] = (symb1[0] < symb2[0], "bool")
+
+    def GT(self, var, symb1, symb2):
+        #TODO nil
+        self.handleVariable(var)
+        symb1 = self.handleSymbol(symb1, ["int", "string", "bool"])
+        symb2 = self.handleSymbol(symb2, ["int", "string", "bool"])
+        if symb1[1] == symb2[1]:
+            self.variables[var.value] = (symb1[0] > symb2[0], "bool")
+
+    def EQ(self, var, symb1, symb2):
+        #TODO nil
+        self.handleVariable(var)
+        symb1 = self.handleSymbol(symb1, ["int", "string", "bool"])
+        symb2 = self.handleSymbol(symb2, ["int", "string", "bool"])
+        if symb1[1] == symb2[1]:
+            self.variables[var.value] = (symb1[0] == symb2[0], "bool")
+
+    def AND(self, var, symb1, symb2):
+        self.handleVariable(var)
+        symb1 = self.handleSymbol(symb1, ["bool"])
+        symb2 = self.handleSymbol(symb2, ["bool"])
+        self.variables[var.value] = (symb1[0] and symb2[0], "bool")
+
+    def OR(self, var, symb1, symb2):
+        self.handleVariable(var)
+        symb1 = self.handleSymbol(symb1, ["bool"])
+        symb2 = self.handleSymbol(symb2, ["bool"])
+        self.variables[var.value] = (symb1[0] or symb2[0], "bool")
+
+    def NOT(self, var, symb):
+        self.handleVariable(var)
+        symb = self.handleSymbol(symb, ["bool"])
+        self.variables[var.value] = (not symb[0], "bool")
+
+    def INT2CHAR(self, var, symb):
+        #TODO
+        pass
+
+    def STRI2INT(self, var, symb1, symb2):
+        #TODO
+        pass
+
+    def READ(self, var, type):
+        #TODO
+        pass
+
+    def WRITE(self, symb):
+        #TODO
+        pass
+
+    def CONCAT(self, var, symb1, symb2):
+        #TODO
+        pass
+
+    def STRLEN(self, var, symb):
+        #TODO
+        pass
+
+    def GETCHAR(self, var, symb1, symb2):
+        #TODO
+        pass
+
+    def SETCHAR(self, var, symb1, symb2):
+        #TODO
+        pass
+
+    def TYPE(self, var, symb):
+        #TODO
+        pass
+
+    def LABEL(self, label):
+        #TODO
+        pass
+
+    def JUMP(self, label):
+        #TODO
+        pass
+
+    def JUMPIFEQ(self, label, symb1, symb2):
+        #TODO
+        pass
+
+    def JUMPIFNEQ(self, label, symb1, symb2):
+        #TODO
+        pass
+
+    def EXIT(self, symb):
+        #TODO
+        pass
+
+    def DPRINT(self, symb):
+        #TODO
+        pass
+
+    def BREAK(self):
+        #TODO
+        pass
+    
 
 class Instruction:
     def __init__(self, order, opcode):
@@ -32,7 +246,7 @@ class Instruction:
         self.args = []
 
     def __repr__(self):
-        return str("\n  Instruction: " + self.opcode + str(self.args))
+        return str("\n  Instruction: " + self.opcode + "  order=" + self.order + str(self.args))
 
     def addArg(self, arg):
         self.args.append(arg)
@@ -44,10 +258,10 @@ class Argument:
         self.value = value
 
     def __repr__(self):
-        if self.value:
-            return str("\n    Arg: type=" + self.type + "  value=" + self.value)
-        else:
-            return str("\n    Arg: " + self.type)
+        string = "\n      Arg: type=" + self.type
+        if self.value != None:
+            string += ", value=" + self.value
+        return string
 
 
 class Frame:
@@ -142,9 +356,9 @@ except Exception as exception:
         exitError(31)
 
 # Print instructions and arguments
-print(re.sub(r'[,\]\[]', '', program.__repr__()), file = sys.stderr)
+program.sortByOrder()
 
-
+program.executeProgram()
 # Close files
 sourceFile.close()
 inputFile.close()
