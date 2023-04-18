@@ -465,18 +465,19 @@ def exitError(errorCode):
 if __name__ == "__main__":
     # Parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("--source", help="Source file", required=False)
+    parser.add_argument("--source", help="Source file to be interpreted", required=False)
     parser.add_argument("--input", help="Input file", required=False)
     try:
         args = vars(parser.parse_args())
     except:
-        exitError(10)
+        if len(sys.argv) < 2:
+            exitError(10)
+        else:
+            exit(0)
 
     # Open source file
-    fileGiven = False
     if args["source"] != None:
         try:
-            fileGiven = True
             sourceFile = open(args["source"], "r")
         except:
             exitError(11)
@@ -486,13 +487,13 @@ if __name__ == "__main__":
     # Open input file
     if args["input"] != None:
         try:
-            fileGiven = True
             inputFile = open(args["input"], "r")
         except:
             exitError(11)
     else:
         inputFile = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8')
-    if not fileGiven:
+
+    if args["source"] == None and args["input"] == None:
         exitError(10)
 
     # Check XML structure ans save instructions and arguments
